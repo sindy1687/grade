@@ -1,0 +1,502 @@
+/* ======================================================
+   🛡️ 勇者公會成績看板 v7.8 - 童話完整主題
+   ✅ 粉彩童話底色
+   ✅ 表格花藤角落
+   ✅ 書卷金色卷軸邊
+   ✅ 按鈕微光動畫
+   ====================================================== */
+
+:root{
+  --bg-1:#fff6fb;
+  --bg-2:#f3fbff;
+  --bg-3:#f7fff5;
+
+  --panel:#fffdf8;
+  --panel-2:#fff7ef;
+
+  --text:#3a2f3f;
+  --muted:#6b5c74;
+
+  --accent:#ff9ecb;
+  --accent-2:#8fd7ff;
+  --accent-3:#9bf2c7;
+
+  --danger:#ff6b8f;
+  --ok:#2fbf88;
+
+  --border:rgba(60,40,70,0.10);
+  --border-strong:rgba(255,158,203,0.35);
+
+  --shadow: 0 10px 24px rgba(80,40,90,0.10);
+  --shadow-strong: 0 14px 30px rgba(80,40,90,0.16);
+
+  --radius: 18px;
+  --radius-soft: 22px;
+}
+
+*{box-sizing:border-box;}
+
+body{
+  margin:0;
+  font-family:"Noto Sans TC", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(1200px 700px at 10% 10%, rgba(255,158,203,0.18) 0%, transparent 60%),
+    radial-gradient(1200px 700px at 90% 15%, rgba(143,215,255,0.22) 0%, transparent 60%),
+    radial-gradient(1400px 900px at 30% 90%, rgba(155,242,199,0.18) 0%, transparent 65%),
+    linear-gradient(160deg, var(--bg-1), var(--bg-2) 45%, var(--bg-3));
+  min-height:100vh;
+}
+
+/* 主背景容器 */
+#guild-bg{
+  max-width:1200px;
+  margin:26px auto 60px;
+  padding:0 18px;
+}
+
+/* 標題 */
+#guild-title{
+  margin:6px 0 18px;
+  font-size:clamp(22px, 3.2vw, 34px);
+  letter-spacing:0.6px;
+  padding:18px 20px;
+  background: linear-gradient(135deg,
+    rgba(255,158,203,0.18),
+    rgba(143,215,255,0.18),
+    rgba(155,242,199,0.16));
+  border:1px solid var(--border-strong);
+  border-radius:var(--radius-soft);
+  box-shadow:var(--shadow-strong);
+  text-shadow:0 1px 0 rgba(255,255,255,0.6);
+}
+
+/* 搜尋 */
+#searchBox{
+  width:100%;
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,0.75);
+  color:var(--text);
+  outline:none;
+  margin-bottom:12px;
+  box-shadow:var(--shadow);
+}
+#searchBox::placeholder{color:rgba(70,50,80,0.45);}
+
+/* 功能列：改成網格排列更整齊 */
+#actionBar{
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
+  gap: 10px 10px;
+  align-items: center;
+
+  padding: 12px 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+}
+
+/* divider 在 grid 下會變亂，直接隱藏 */
+#actionBar .divider{
+  display: none !important;
+}
+
+#actionBar .divider{
+  width:1px;
+  height:26px;
+  background:var(--border);
+  margin:0 4px;
+}
+
+/* 按鈕 */
+button{
+  cursor:pointer;
+  border:1px solid rgba(70,50,80,0.12);
+  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.75));
+  color:var(--text);
+  padding:8px 12px;
+  border-radius:12px;
+  transition:0.15s ease;
+  box-shadow:0 4px 10px rgba(90,50,110,0.08);
+
+  position: relative;
+  overflow: hidden;
+
+  animation: fairyPulse 3.6s ease-in-out infinite;
+}
+button:hover{
+  transform:translateY(-1px);
+  border-color:rgba(255,158,203,0.45);
+  box-shadow:0 6px 14px rgba(90,50,110,0.12);
+}
+
+/* 微光掃過 */
+button::after{
+  content:"";
+  position:absolute;
+  top:-20%;
+  left:-40%;
+  width:60%;
+  height:140%;
+  pointer-events:none;
+  background:
+    linear-gradient(120deg,
+      transparent 0%,
+      rgba(255,255,255,0.25) 35%,
+      rgba(255,255,255,0.45) 50%,
+      rgba(255,255,255,0.25) 65%,
+      transparent 100%);
+  transform: skewX(-15deg);
+  opacity:0;
+}
+button:hover::after{
+  opacity:1;
+  animation: fairyShine 0.9s ease;
+}
+
+@keyframes fairyPulse{
+  0%,100%{ box-shadow:0 4px 10px rgba(90,50,110,0.08); filter:saturate(1); }
+  50%{ box-shadow:0 6px 16px rgba(90,50,110,0.14); filter:saturate(1.05); }
+}
+@keyframes fairyShine{
+  0%{ left:-50%; opacity:0; }
+  20%{ opacity:0.6; }
+  100%{ left:120%; opacity:0; }
+}
+
+button.primary{
+  background:
+    linear-gradient(135deg,
+      rgba(255,158,203,0.35),
+      rgba(143,215,255,0.28),
+      rgba(155,242,199,0.25));
+  border-color:rgba(255,158,203,0.55);
+  animation-duration:3.0s;
+}
+button.ghost{
+  background:rgba(255,255,255,0.6);
+}
+
+/* 下拉選單 */
+select{
+  border:1px solid var(--border);
+  background:rgba(255,255,255,0.8);
+  color:var(--text);
+  padding:8px 10px;
+  border-radius:12px;
+  outline:none;
+  box-shadow:var(--shadow);
+}
+
+/* 表格區 */
+#tableWrapper{
+  position: relative;
+  overflow:auto;
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.7));
+  box-shadow:var(--shadow);
+}
+
+/* 主表格 */
+#scoreTable{
+  width:100%;
+  border-collapse:collapse;
+  min-width:860px;
+}
+#scoreTable th, #scoreTable td{
+  padding:10px 10px;
+  border-bottom:1px solid rgba(70,50,80,0.08);
+  text-align:center;
+  vertical-align:middle;
+  white-space:nowrap;
+}
+#scoreTable th{
+  position: sticky;
+  top:0;
+  z-index:3;
+  background:
+    linear-gradient(135deg,
+      rgba(255,158,203,0.18),
+      rgba(143,215,255,0.16),
+      rgba(155,242,199,0.14));
+  font-weight:700;
+  color:#4a3b55;
+}
+
+/* 左側凍結欄 */
+.leftFreeze{
+  position: sticky;
+  z-index:4;
+  background:rgba(255,255,255,0.95);
+}
+.nameCell{
+  cursor:pointer;
+  text-decoration: underline;
+  text-underline-offset:3px;
+}
+
+/* 缺交 */
+.missing{ color: rgba(80,60,95,0.65); }
+.check-no{ opacity:0.75; }
+.add-btn, .edit-btn{
+  margin-left:6px;
+  cursor:pointer;
+  opacity:0.9;
+}
+.add-btn:hover, .edit-btn:hover{
+  opacity:1;
+  text-decoration: underline;
+}
+
+/* 低分/補考 */
+.low-score{ color: var(--danger); font-weight:700; }
+.danger-icon{
+  margin-left:6px;
+  font-size:11px;
+  padding:2px 7px;
+  border-radius:999px;
+  background: rgba(255,107,143,0.12);
+  border:1px solid rgba(255,107,143,0.35);
+}
+
+/* 彈窗通用 */
+.hidden{ display:none !important; }
+
+#scrollPopup, #inputBox, #unitBox, #studentBox{
+  position: fixed;
+  inset:0;
+  background: rgba(255, 240, 250, 0.75);
+  backdrop-filter: blur(6px);
+  z-index:50;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+
+/* 書卷內容（加金色卷軸邊） */
+#scrollContent{
+  width:min(980px, 96vw);
+  max-height:92vh;
+  overflow:auto;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border:1px solid rgba(170,120,30,0.25);
+  border-radius: var(--radius-soft);
+  padding:22px 22px 26px;
+  box-shadow: var(--shadow-strong);
+  position: relative;
+  box-shadow:
+    0 8px 24px rgba(90,50,110,0.10),
+    inset 0 0 0 1px rgba(255,215,120,0.18);
+}
+#scrollContent::before{
+  content:"";
+  position:absolute;
+  inset:10px;
+  border-radius:20px;
+  pointer-events:none;
+  background:
+    linear-gradient(135deg,
+      rgba(255,215,120,0.25),
+      rgba(255,180,70,0.20),
+      rgba(255,235,170,0.22));
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding:2px;
+  border:1px solid rgba(255,200,90,0.35);
+  box-shadow:
+    inset 0 0 10px rgba(255,200,90,0.18),
+    0 0 0 1px rgba(255,215,120,0.12);
+}
+#scrollContent::after{
+  content:"";
+  position:absolute;
+  left:14px; right:14px; top:8px; bottom:8px;
+  pointer-events:none;
+  border-radius:22px;
+  background:
+    linear-gradient(180deg,
+      rgba(255,215,140,0.22),
+      transparent 18%,
+      transparent 82%,
+      rgba(255,215,140,0.22));
+  mix-blend-mode: multiply;
+  opacity:0.6;
+}
+
+#scrollClose{
+  position:absolute;
+  right:14px;
+  top:10px;
+  cursor:pointer;
+  opacity:0.85;
+  font-size:18px;
+  padding:6px 10px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,0.85);
+}
+#scrollClose:hover{ opacity:1; }
+
+.scroll-title{ margin:0 0 8px; font-size:22px; }
+.scroll-subtitle{ margin:18px 0 8px; color:var(--muted); }
+
+.scroll-table{
+  width:100%;
+  border-collapse:collapse;
+}
+.scroll-table th, .scroll-table td{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(70,50,80,0.08);
+  text-align:center;
+}
+
+/* Chart canvas */
+#chartCanvas{
+  width:100% !important;
+  max-height:320px;
+}
+
+/* 小視窗 */
+#inputInner, #unitInner, #studentInner{
+  width:min(420px, 94vw);
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding:20px 18px 16px;
+  box-shadow: var(--shadow-strong);
+}
+
+#inputInner h3, #unitInner h3, #studentInner h3{ margin:0 0 12px; }
+
+label{
+  display:block;
+  margin-top:10px;
+  margin-bottom:6px;
+  color:var(--muted);
+  font-size:14px;
+}
+
+input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,0.9);
+  color:var(--text);
+  outline:none;
+  box-shadow: var(--shadow);
+}
+
+.modal-actions{
+  display:flex;
+  gap:8px;
+  margin-top:14px;
+  justify-content:flex-end;
+}
+
+/* actionBar 可見保險 */
+#actionBar button, #actionBar select{
+  display:inline-flex !important;
+  visibility: visible !important;
+  opacity:1 !important;
+}
+
+/* ==========================
+   🧲 單元拖拉提示
+========================== */
+.unitHeader{ cursor: grab; }
+.unitHeader.unit-dragging{ opacity:0.55; }
+.unitHeader.unit-drag-over{
+  outline:2px dashed rgba(255,158,203,0.85);
+  outline-offset:-4px;
+}
+
+/* ==========================
+   🌿 表格四角花藤（配合 index 內的 span）
+========================== */
+#tableWrapper.vine-4 .corner-vine{
+  position:absolute;
+  width:80px;
+  height:80px;
+  pointer-events:none;
+  z-index:2;
+  opacity:0.9;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255,158,203,0.55) 0 6px, transparent 7px),
+    radial-gradient(circle at 34% 12%, rgba(143,215,255,0.55) 0 5px, transparent 6px),
+    radial-gradient(circle at 15% 40%, rgba(155,242,199,0.55) 0 5px, transparent 6px),
+    radial-gradient(circle at 40% 32%, rgba(255,158,203,0.45) 0 4px, transparent 5px),
+    conic-gradient(from 220deg at 60% 60%,
+      rgba(120,180,140,0.0) 0deg,
+      rgba(120,180,140,0.25) 20deg,
+      rgba(120,180,140,0.0) 60deg),
+    conic-gradient(from 40deg at 40% 40%,
+      rgba(120,180,140,0.0) 0deg,
+      rgba(120,180,140,0.22) 22deg,
+      rgba(120,180,140,0.0) 65deg);
+}
+
+#tableWrapper.vine-4 .corner-vine.tl{ left:6px; top:6px; }
+#tableWrapper.vine-4 .corner-vine.tr{ right:6px; top:6px; transform: scaleX(-1); }
+#tableWrapper.vine-4 .corner-vine.bl{ left:6px; bottom:6px; transform: scaleY(-1); }
+#tableWrapper.vine-4 .corner-vine.br{ right:6px; bottom:6px; transform: rotate(180deg); }
+/* 讓年級欄更窄，姓名欄更緊密 */
+#scoreTable th.leftFreeze:first-child,
+#scoreTable td.leftFreeze:first-child{
+  width: 70px;
+  min-width: 70px;
+}
+
+#scoreTable th.leftFreeze.nameCell,
+#scoreTable td.leftFreeze.nameCell{
+  min-width: 120px;
+}
+
+/* ==========================
+   💾 匯出提醒橫條
+========================== */
+#backupBanner{
+  position: relative;
+  z-index: 20;
+  display: none;
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,158,203,0.45);
+  background:
+    linear-gradient(135deg,
+      rgba(255,158,203,0.18),
+      rgba(143,215,255,0.18),
+      rgba(155,242,199,0.16));
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-weight: 600;
+}
+
+#backupBanner .small{
+  opacity: 0.8;
+  font-weight: 500;
+  margin-left: 6px;
+  font-size: 12px;
+}
+#backupBanner .banner-actions{
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+#backupBanner .banner-row{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+

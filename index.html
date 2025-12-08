@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>勇者公會成績看板 v7.8</title>
+
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div id="guild-bg">
+
+  <!-- 標題 -->
+  <h1 id="guild-title">🛡️ 勇者公會 · 成績任務看板</h1>
+
+  <!-- 搜尋 -->
+  <input id="searchBox" placeholder="🔍 搜尋勇者姓名..." oninput="renderTable()">
+
+  <!-- 功能列 -->
+  <div id="actionBar">
+
+    <!-- 學童 -->
+    <button onclick="openAddStudent()">＋ 新增學童</button>
+    <button onclick="openDeleteStudentMenu()">🗑️ 刪除學童</button>
+
+    <span class="divider"></span>
+
+    <!-- 單元 -->
+    <button onclick="openAddUnit()">＋ 新增單元</button>
+    <button onclick="openDeleteUnitMenu()">🗑️ 刪除單元</button>
+
+    <span class="divider"></span>
+
+    <!-- 排序 -->
+    <select id="sortSelect" onchange="setSortMode()">
+      <option value="default">排序：原始</option>
+      <option value="avgHigh">平均分數（高→低）</option>
+      <option value="avgLow">平均分數（低→高）</option>
+      <option value="incomplete">未完成（少→多）</option>
+      <option value="name">姓名（A→Z）</option>
+    </select>
+
+    <span class="divider"></span>
+
+    <!-- Google Sheet 雙向同步 -->
+    <button data-sheet-pull="1" onclick="syncFromSheet()">📥 從 Google Sheet 讀取</button>
+    <button data-sheet-push="1" onclick="syncToSheet()">🧾 同步到 Google Sheet</button>
+
+    <span class="divider"></span>
+
+    <!-- 匯入 / 匯出 -->
+    <button onclick="exportData()">📤 匯出資料</button>
+    <button onclick="document.getElementById('importFile').click()">📥 匯入資料</button>
+    <input id="importFile" type="file" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+
+  <!-- 成績總表 -->
+  <div id="tableWrapper">
+    <table id="scoreTable"></table>
+  </div>
+</div>
+
+<!-- 書卷彈窗 -->
+<div id="scrollPopup" class="hidden">
+  <div id="scrollContent">
+    <div id="scrollClose" onclick="closeScroll()">✕</div>
+
+    <h2 id="stuName" class="scroll-title"></h2>
+
+    <h3 class="scroll-subtitle">⚔️ 能力值（全部成績）</h3>
+    <table id="recordTable" class="scroll-table"></table>
+
+    <h3 class="scroll-subtitle">📈 進度曲線（各單元最新）</h3>
+    <canvas id="chartCanvas"></canvas>
+
+    <h3 class="scroll-subtitle">🧝 精靈提示</h3>
+    <p id="aiText"></p>
+  </div>
+</div>
+
+<!-- 成績新增 / 修改 / 補考 視窗 -->
+<div id="inputBox" class="hidden">
+  <div id="inputInner">
+    <h3 id="inputTitle"></h3>
+
+    <label>日期：</label>
+    <input id="inputDate" placeholder="例如：12/09">
+
+    <label>分數：</label>
+    <input id="inputScore" type="number" placeholder="例如：95">
+
+    <div class="modal-actions">
+      <button class="primary" onclick="saveInput()">💾 儲存</button>
+      <button class="ghost" onclick="closeInput()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增單元視窗 -->
+<div id="unitBox" class="hidden">
+  <div id="unitInner">
+    <h3>新增單元</h3>
+    <label>單元名稱：</label>
+    <input id="unitName" placeholder="例如：L11">
+
+    <div class="modal-actions">
+      <button class="primary" onclick="saveUnit()">儲存</button>
+      <button class="ghost" onclick="closeUnit()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增學童視窗 -->
+<div id="studentBox" class="hidden">
+  <div id="studentInner">
+    <h3>新增學童</h3>
+
+    <label>年級：</label>
+    <input id="studentGrade" placeholder="例如：五年級">
+
+    <label>姓名：</label>
+    <input id="studentName" placeholder="輸入姓名">
+
+    <div class="modal-actions">
+      <button class="primary" onclick="saveStudent()">儲存</button>
+      <button class="ghost" onclick="closeStudent()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- JS -->
+<script src="js/data.js"></script>
+<script src="js/main.js"></script>
+
+</body>
+</html>

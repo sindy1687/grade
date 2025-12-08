@@ -1,0 +1,1 @@
+function addTask(){document.getElementById("tasks").innerHTML+="<p>新任務已建立（示例）</p>";}
