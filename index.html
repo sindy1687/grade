@@ -13,13 +13,18 @@
 <div id="guild-bg">
 
   <!-- 標題 -->
-  <h1 id="guild-title">🛡️ 勇者公會 · 成績任務看板</h1>
+  <h1 id="guild-title">🛡️ 勇者公會 · 成績任務看板<span id="classNameLabel"></span></h1>
 
   <!-- 搜尋 -->
   <input id="searchBox" placeholder="🔍 搜尋勇者姓名..." oninput="renderTable()">
 
   <!-- 功能列 -->
   <div id="actionBar">
+
+    <!-- 班級 / 成績單 -->
+    <button onclick="openClassBox()">🏫 班級 / 成績單</button>
+
+    <span class="divider"></span>
 
     <!-- 學童 -->
     <button onclick="openAddStudent()">＋ 新增學童</button>
@@ -95,9 +100,38 @@
     <label>分數：</label>
     <input id="inputScore" type="number" placeholder="例如：95">
 
+    <label class="inline-check" style="margin-top:12px;">
+      <input type="checkbox" id="inputAbsent" onchange="syncInputAbsent()"> 🚫 缺席（沒有出席，無法檢測）
+    </label>
+
     <div class="modal-actions">
       <button class="primary" onclick="saveInput()">💾 儲存</button>
       <button class="ghost" onclick="closeInput()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 選擇 / 創建成績單（班級）視窗 -->
+<div id="classBox" class="hidden">
+  <div id="classInner">
+    <div id="classClose" onclick="closeClassBox()">✕</div>
+
+    <h3>🏫 選擇成績單</h3>
+    <div id="classList"></div>
+
+    <h3 class="class-new-title">＋ 創建新成績單（新班級）</h3>
+    <label>班級名稱：</label>
+    <input id="newClassName" placeholder="例如：五年甲班 / 115 上學期">
+
+    <label>單元設定：</label>
+    <select id="newClassCopyFrom"></select>
+
+    <label class="inline-check">
+      <input type="checkbox" id="newClassCopyStudents"> 同時複製學生名單（不含成績）
+    </label>
+
+    <div class="modal-actions">
+      <button class="primary" onclick="createClass()">建立並開始使用</button>
     </div>
   </div>
 </div>
@@ -114,7 +148,7 @@
     <label>日期：</label>
     <input id="batchDate" placeholder="例如：12/09">
 
-    <div class="batch-hint">分數空白＝這位不輸入｜Enter / ↓ 跳下一位，最後一位按 Enter 儲存｜Esc 取消</div>
+    <div class="batch-hint">分數空白＝這位不輸入｜按 A 或勾「缺席」＝沒出席無法檢測｜Enter / ↓ 跳下一位，最後一位按 Enter 儲存｜Esc 取消</div>
 
     <div id="batchListWrap">
       <table id="batchList" class="scroll-table"></table>

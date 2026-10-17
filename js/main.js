@@ -6,6 +6,8 @@
    - 單元拖拉排序（同區塊內）
    - 及格分數集中於 PASS_SCORE
    - 批量輸入成績（各區塊）、姓名拖移排序、Enter 確定 / Esc 取消
+   - 缺席（沒有出席無法檢測）：不算分數 / 補考，不蓋掉之前的分數，待補測
+   - 多班級：開啟時選擇「繼續使用舊成績單 / 創建新成績單」，各班資料與 Google Sheet 分頁分開
    - 成績新增 / 修改 / 補考 / 通過後重考（保留所有歷史）
    - 主表顯示各單元最新一筆
    - 補考提示、未完成 / 補考數統計
@@ -17,7 +19,7 @@
 
 /* ---------------- Google Sheet Web App URL ---------------- */
 const SHEET_WEBAPP_URL =
-  "https://script.google.com/macros/s/AKfycbzFUNRL7JWo9URZCwbhi_maK1dgeLz5U8E-6KEz7JTN1iYCDZkiHmUe1uWLO0oJ13ciXw/exec";
+  "https://script.google.com/macros/s/AKfycbwMcX0gnwlhvpvUfsVIvJWn8nx0wQSCILX6UW-iir6Hv9-gh9YD2kAxxukFXO7gJYzE/exec";
 
 /* ---------------- 基本資料 ---------------- */
 
@@ -30,6 +32,34 @@ let units = [
 
 // 及格分數：低於此分數顯示「補考」，主表 / 統計 / 書卷 / 精靈提示都連動
 const PASS_SCORE = 80;
+
+/* 缺席（沒有出席，無法檢測）紀錄：{ date, value: null, absent: true }
+   - 不算分數：不計平均、不算補考
+   - 不會蓋掉之前的分數：各處的「最新成績」都是最後一筆「有分數」的紀錄
+   - 只有缺席、還沒考到分數 → 算未完成，顯示「🚫 缺席」待補測 */
+function isAbsent(rec) {
+  return !!rec?.absent;
+}
+
+// 最後一筆有分數的紀錄 → { rec, index }；沒有就 null
+function latestScored(arr) {
+  for (let i = (arr?.length || 0) - 1; i >= 0; i--) {
+    if (!isAbsent(arr[i])) return { rec: arr[i], index: i };
+  }
+  return null;
+}
+
+// 有紀錄但全部都是缺席（還沒考到）
+function isAbsentOnly(arr) {
+  return !!arr?.length && !latestScored(arr);
+}
+
+function lastAbsentDate(arr) {
+  for (let i = (arr?.length || 0) - 1; i >= 0; i--) {
+    if (isAbsent(arr[i])) return arr[i].date ?? "";
+  }
+  return "";
+}
 
 /* 三個成績區塊：每個單元只屬於一個區塊（單元名稱全域唯一）
    units 為三區塊合併後的完整清單，供統計 / 同步 / 匯出使用 */
@@ -215,6 +245,23 @@ window.addEventListener("beforeunload", (e) => {
    Google Sheet 同步
    ====================================================== */
 
+// Apps Script 需為支援多班級的版本（v2+），舊版會讓不同班級互相覆蓋
+const SHEET_SCRIPT_MIN_VERSION = 3;   // v3：支援缺席紀錄
+
+async function checkSheetScript() {
+  try {
+    const res = await fetch(`${SHEET_WEBAPP_URL}?info=1&t=${Date.now()}`);
+    const info = await res.json();
+    if (Number(info.scriptVersion) >= SHEET_SCRIPT_MIN_VERSION) return true;
+  } catch (err) {
+    console.error(err);
+    alert("❌ 無法連線到 Google Sheet（請檢查 Web App 權限/網址）。");
+    return false;
+  }
+  alert("⚠️ Google Sheet 的 Apps Script 版本太舊（需支援多班級、缺席）。\n請把 apps-script/Code.gs 貼到 Apps Script，並用「管理部署作業 → 編輯 → 新版本」更新後再同步。");
+  return false;
+}
+
 // 網站 → Google Sheet
 async function syncToSheet() {
   if (!SHEET_WEBAPP_URL) {
@@ -223,7 +270,17 @@ async function syncToSheet() {
   }
 
   try {
-    const payload = getDataSnapshot();
+    if (!(await checkSheetScript())) return;
+
+    // sections / passScore 給 Apps Script 產生閱讀用分頁（區塊名稱、補考標紅）
+    // classId / className：每個班級分開存，分頁名稱加上班級名
+    const payload = {
+      ...getDataSnapshot(),
+      sections: SECTIONS,
+      passScore: PASS_SCORE,
+      classId: classRegistry.currentId,
+      className: currentClassName()
+    };
 
     await fetch(SHEET_WEBAPP_URL, {
       method: "POST",
@@ -232,7 +289,7 @@ async function syncToSheet() {
       body: JSON.stringify(payload)
     });
 
-    alert("✅ 已送出同步請求，請到 Google Sheet 確認。");
+    alert(`✅ 已送出「${currentClassName()}」的同步請求，請到 Google Sheet 確認（「${currentClassName()}｜…」分頁）。`);
     clearDirtyForExport();
   } catch (err) {
     console.error(err);
@@ -248,28 +305,21 @@ async function syncFromSheet() {
   }
 
   try {
-    const url = SHEET_WEBAPP_URL + "?t=" + Date.now();
+    if (!(await checkSheetScript())) return;
+
+    const url = `${SHEET_WEBAPP_URL}?classId=${encodeURIComponent(classRegistry.currentId)}&t=${Date.now()}`;
     const res = await fetch(url);
     const json = await res.json();
 
     if (!json.units || !json.Students) {
-      alert("❌ 讀取失敗：Google Sheet 端暫無可用資料。");
+      alert(`❌ 讀取失敗：Google Sheet 還沒有「${currentClassName()}」的資料（請先同步上去一次）。`);
       return;
     }
 
-    units = json.units;
-    sectionUnits = json.sectionUnits || null;
-    studentOrder = json.studentOrder || [];
-    Students = json.Students;
+    if (!confirm(`從 Google Sheet 讀取會取代「${currentClassName()}」目前的資料，確定？`)) return;
 
-    normalizeAllStudents();
-
-    const prevInit = isInitializing;
-    isInitializing = true;
-    try {
-      localStorage.setItem("V7Students", JSON.stringify(getDataSnapshot()));
-    } catch (_) {}
-    isInitializing = prevInit;
+    applySnapshot(json);
+    persistCurrentClass();
 
     renderTable();
 
@@ -278,7 +328,7 @@ async function syncFromSheet() {
       openScroll(currentScrollID);
     }
 
-    alert("✅ 已從 Google Sheet 更新網站資料。");
+    alert(`✅ 已從 Google Sheet 更新「${currentClassName()}」。`);
   } catch (err) {
     console.error(err);
     alert("❌ 讀取失敗（請檢查 Web App 權限/網址）。");
@@ -299,14 +349,16 @@ function calcStudentStats(stu, unitList = units) {
   let scores = [];
   let incomplete = 0;
   let retake = 0;
+  let absent = 0;
 
   unitList.forEach(unit => {
     const arr = stu?.scores?.[unit];
-    if (!arr || arr.length === 0) {
+    const latest = latestScored(arr)?.rec;
+    if (!latest) {          // 沒有紀錄或只有缺席
       incomplete++;
+      if (isAbsentOnly(arr)) absent++;
       return;
     }
-    const latest = arr[arr.length - 1];
     const v = Number(latest.value);
     if (!Number.isNaN(v)) {
       scores.push(v);
@@ -315,7 +367,7 @@ function calcStudentStats(stu, unitList = units) {
   });
 
   const avg = scores.length ? scores.reduce((a,b)=>a+b,0) / scores.length : 0;
-  return { avg, incomplete, retake };
+  return { avg, incomplete, retake, absent };
 }
 
 function getSortedStudentIds() {
@@ -390,14 +442,14 @@ function buildSectionTable(sectionKey, ids, keyword) {
     html += `<th class="missing">尚無單元，按「＋ 新增單元」開始</th>`;
   }
 
-  html += `<th>未完成</th><th>補考數</th></tr>`;
+  html += `<th>未完成</th><th>補考數</th><th>缺席</th></tr>`;
 
   ids.forEach(id => {
     const stu = Students[id];
     if (!stu?.name) return;
     if (keyword && !stu.name.includes(keyword)) return;
 
-    const { incomplete, retake } = calcStudentStats(stu, secUnits);
+    const { incomplete, retake, absent } = calcStudentStats(stu, secUnits);
 
     html += `
       <tr data-id="${id}">
@@ -410,9 +462,16 @@ function buildSectionTable(sectionKey, ids, keyword) {
 
     secUnits.forEach(unit => {
       const arr = stu.scores?.[unit];
+      const found = latestScored(arr);
 
-      if (arr && arr.length > 0) {
-        const latest = arr[arr.length - 1];
+      if (isAbsentOnly(arr)) {
+        html += `
+          <td class="absent-cell">
+            🚫缺席 ${lastAbsentDate(arr)}
+            <span class="add-btn" title="缺席補測" onclick="openRetakeInput('${id}','${unit}')">➕</span>
+          </td>`;
+      } else if (found) {
+        const latest = found.rec;
         const score = Number(latest.value);
         const date = latest.date ?? "";
 
@@ -427,7 +486,7 @@ function buildSectionTable(sectionKey, ids, keyword) {
           html += `
             <td>
               ${date}（${score}）
-              <span class="edit-btn" title="修改最新成績" onclick="openEditScore('${id}','${unit}',${arr.length - 1})">✒️</span>
+              <span class="edit-btn" title="修改最新成績" onclick="openEditScore('${id}','${unit}',${found.index})">✒️</span>
               <span class="edit-btn" title="重考（新增一筆）" onclick="openRetakeInput('${id}','${unit}')">🔁</span>
             </td>`;
         }
@@ -441,10 +500,11 @@ function buildSectionTable(sectionKey, ids, keyword) {
     });
 
     if (secUnits.length === 0) {
-      html += `<td>—</td><td>—</td>`;
+      html += `<td>—</td><td>—</td><td>—</td>`;
     } else {
       html += `<td>${incomplete === 0 ? "✔" : "✘"}</td>`;
       html += `<td>${retake}</td>`;
+      html += `<td class="${absent ? "absent-text" : ""}">${absent}</td>`;
     }
     html += `</tr>`;
   });
@@ -605,6 +665,20 @@ function focusField(id) {
   }, 0);
 }
 
+// 勾選缺席時分數欄停用
+function syncInputAbsent() {
+  const absent = document.getElementById("inputAbsent").checked;
+  const score = document.getElementById("inputScore");
+  score.disabled = absent;
+  if (absent) score.value = "";
+  else focusField("inputScore");
+}
+
+function setInputAbsent(absent) {
+  document.getElementById("inputAbsent").checked = absent;
+  syncInputAbsent();
+}
+
 function openInput(id, unit) {
   editingID = id;
   editingUnit = unit;
@@ -616,6 +690,7 @@ function openInput(id, unit) {
 
   document.getElementById("inputDate").value = todayMD();
   document.getElementById("inputScore").value = "";
+  setInputAbsent(false);
   document.getElementById("inputBox").classList.remove("hidden");
   focusField("inputScore");
 }
@@ -633,8 +708,9 @@ function openEditScore(id, unit, index) {
 
   document.getElementById("inputDate").value = old.date ?? "";
   document.getElementById("inputScore").value = old.value ?? "";
+  setInputAbsent(isAbsent(old));
   document.getElementById("inputBox").classList.remove("hidden");
-  focusField("inputScore");
+  focusField(isAbsent(old) ? "inputDate" : "inputScore");
 }
 
 function openRetakeInput(id, unit) {
@@ -644,13 +720,15 @@ function openRetakeInput(id, unit) {
 
   const stu = Students[id];
   const arr = stu?.scores?.[unit] || [];
-  const latest = arr[arr.length - 1];
+  const latest = latestScored(arr)?.rec;
   const passed = latest && Number(latest.value) >= PASS_SCORE;
+  const kind = isAbsentOnly(arr) ? "缺席補測" : (passed ? "重考新增" : "補考新增");
   document.getElementById("inputTitle").innerText =
-    `${passed ? "重考新增" : "補考新增"}｜${stu ? stu.name : ""}｜${unit}`;
+    `${kind}｜${stu ? stu.name : ""}｜${unit}`;
 
   document.getElementById("inputDate").value = todayMD();
   document.getElementById("inputScore").value = "";
+  setInputAbsent(false);
   document.getElementById("inputBox").classList.remove("hidden");
   focusField("inputScore");
 }
@@ -664,9 +742,14 @@ function saveInput() {
   const date = document.getElementById("inputDate").value.trim();
   const scoreRaw = document.getElementById("inputScore").value.trim();
   const score = Number(scoreRaw);
+  const absent = document.getElementById("inputAbsent")?.checked;
 
-  if (!date || scoreRaw === "") return alert("請輸入日期與分數。");
-  if (Number.isNaN(score)) return alert("分數格式不正確。");
+  if (!date) return alert("請輸入日期。");
+  if (!absent) {
+    if (scoreRaw === "") return alert("請輸入分數，或勾選「缺席」。");
+    if (Number.isNaN(score)) return alert("分數格式不正確。");
+  }
+  const record = absent ? { date, value: null, absent: true } : { date, value: score };
 
   const stu = Students[editingID];
   if (!stu) return alert("找不到該學童資料。");
@@ -677,9 +760,9 @@ function saveInput() {
   const arr = stu.scores[editingUnit];
 
   if (editingIndex !== null) {
-    arr[editingIndex] = { date, value: score };
+    arr[editingIndex] = record;
   } else {
-    arr.push({ date, value: score });
+    arr.push(record);
   }
 
   saveData();
@@ -738,24 +821,33 @@ function renderBatchList() {
   document.getElementById("batchNewUnit").classList.toggle("hidden", !isNew);
 
   const typed = {};
+  const typedAbsent = {};
   getBatchInputs().forEach(inp => { typed[inp.dataset.id] = inp.value; });
+  getBatchAbsentBoxes().forEach(cb => { typedAbsent[cb.dataset.id] = cb.checked; });
 
   const { ids } = getSortedStudentIds();
-  let html = `<tr><th>年級</th><th>姓名</th><th>目前最新</th><th>本次分數</th></tr>`;
+  let html = `<tr><th>年級</th><th>姓名</th><th>目前最新</th><th>本次分數</th><th>缺席</th></tr>`;
 
   ids.forEach(id => {
     const stu = Students[id];
     if (!stu?.name) return;
     const arr = isNew ? null : stu.scores?.[unit];
-    const latest = arr?.length ? arr[arr.length - 1] : null;
+    const latest = latestScored(arr)?.rec;
     const low = latest && Number(latest.value) < PASS_SCORE;
+    const current = latest
+      ? `<span class="${low ? "low-score" : ""}">${latest.date ?? ""}（${latest.value}）</span>`
+      : (isAbsentOnly(arr) ? `<span class="absent-text">🚫缺席 ${lastAbsentDate(arr)}</span>` : "—");
+    const absent = !!typedAbsent[id];
 
     html += `
       <tr>
         <td>${stu.grade ?? ""}</td>
         <td>${stu.name}</td>
-        <td class="${low ? "low-score" : "missing"}">${latest ? `${latest.date ?? ""}（${latest.value}）` : "—"}</td>
-        <td><input class="batch-score" type="number" data-id="${id}" value="${typed[id] ?? ""}"></td>
+        <td class="missing">${current}</td>
+        <td><input class="batch-score" type="number" data-id="${id}" value="${absent ? "" : (typed[id] ?? "")}"
+          ${absent ? "readonly" : ""} placeholder="${absent ? "缺席" : ""}"></td>
+        <td><input class="batch-absent" type="checkbox" data-id="${id}" ${absent ? "checked" : ""}
+          title="沒有出席，無法檢測（分數欄按 A 也可以切換）"></td>
       </tr>`;
   });
 
@@ -768,6 +860,24 @@ function renderBatchList() {
     };
     inp.onblur = () => inp.closest("tr").classList.remove("batch-active");
   });
+  getBatchAbsentBoxes().forEach(cb => {
+    cb.onchange = () => setBatchAbsent(cb.dataset.id, cb.checked);
+  });
+}
+
+function getBatchAbsentBoxes() {
+  return [...document.querySelectorAll("#batchList input.batch-absent")];
+}
+
+// 切換某位學生的缺席：分數欄清空並停用（仍可用鍵盤 Enter / ↑↓ 經過）
+function setBatchAbsent(id, absent) {
+  const inp = getBatchInputs().find(x => x.dataset.id === id);
+  const cb = getBatchAbsentBoxes().find(x => x.dataset.id === id);
+  if (cb) cb.checked = absent;
+  if (!inp) return;
+  if (absent) inp.value = "";
+  inp.placeholder = absent ? "缺席" : "";
+  inp.readOnly = absent;   // 不用 disabled，才能保留焦點與鍵盤移動
 }
 
 function focusBatchRow(index) {
@@ -780,10 +890,18 @@ function focusBatchRow(index) {
   }, 0);
 }
 
-// Enter / ↓ 下一位、↑ 上一位；最後一位按 Enter 儲存
+// Enter / ↓ 下一位、↑ 上一位；最後一位按 Enter 儲存；在分數欄按 A 切換缺席
 function onBatchKey(e) {
   const inputs = getBatchInputs();
   const i = inputs.indexOf(e.target);
+
+  if ((e.key === "a" || e.key === "A") && i !== -1) {
+    e.preventDefault();
+    const id = e.target.dataset.id;
+    const cb = getBatchAbsentBoxes().find(x => x.dataset.id === id);
+    setBatchAbsent(id, !(cb && cb.checked));
+    return;
+  }
 
   if (e.key === "Enter") {
     e.preventDefault();
@@ -816,19 +934,25 @@ function saveBatch() {
     }
   }
 
+  const absentIds = new Set(getBatchAbsentBoxes().filter(cb => cb.checked).map(cb => cb.dataset.id));
   const entries = [];
   for (const inp of getBatchInputs()) {
+    const id = inp.dataset.id;
+    if (absentIds.has(id)) {
+      entries.push({ id, record: { date, value: null, absent: true } });
+      continue;
+    }
     const raw = inp.value.trim();
     if (raw === "") continue;
     const score = Number(raw);
     if (Number.isNaN(score)) {
-      alert(`「${Students[inp.dataset.id]?.name}」的分數格式不正確。`);
+      alert(`「${Students[id]?.name}」的分數格式不正確。`);
       inp.focus();
       return;
     }
-    entries.push({ id: inp.dataset.id, score });
+    entries.push({ id, record: { date, value: score } });
   }
-  if (entries.length === 0) return alert("還沒有輸入任何分數。");
+  if (entries.length === 0) return alert("還沒有輸入任何分數或缺席。");
 
   if (isNew) {
     sectionUnits[batchSection].push(unit);
@@ -836,11 +960,11 @@ function saveBatch() {
     normalizeAllStudents();
   }
 
-  entries.forEach(({ id, score }) => {
+  entries.forEach(({ id, record }) => {
     const stu = Students[id];
     if (!stu.scores) stu.scores = {};
     if (!stu.scores[unit]) stu.scores[unit] = [];
-    stu.scores[unit].push({ date, value: score });
+    stu.scores[unit].push(record);
   });
 
   saveData();
@@ -852,7 +976,9 @@ function saveBatch() {
     openScroll(currentScrollID);
   }
 
-  alert(`✅ 已儲存 ${entries.length} 筆成績到「${unit}」。`);
+  const absentCount = entries.filter(x => x.record.absent).length;
+  alert(`✅ 已儲存到「${unit}」：成績 ${entries.length - absentCount} 筆` +
+    (absentCount ? `、缺席 ${absentCount} 位` : "") + "。");
 }
 
 /* ======================================================
@@ -1129,25 +1255,37 @@ function confirmDeleteStudent() {
 
 // 一位學生在某組單元的完整統計（勇者資訊用）
 function getHeroStats(stu, unitList) {
-  const done = [];      // { unit, latest, best, count, arr }
-  const missing = [];
+  const records = [];   // 有任何紀錄的單元：{ unit, latest, best, count, absentCount, absentOnly, arr }
+  const done = [];      // 有分數
+  const absent = [];    // 只有缺席，待補測
+  const missing = [];   // 完全沒紀錄
   const retake = [];
 
   unitList.forEach(unit => {
     const arr = stu.scores?.[unit];
     if (!arr || arr.length === 0) return missing.push(unit);
 
-    const nums = arr.map(s => Number(s.value)).filter(v => !Number.isNaN(v));
-    const latest = Number(arr[arr.length - 1].value);
-    const item = { unit, latest, best: nums.length ? Math.max(...nums) : NaN, count: arr.length, arr };
+    const nums = arr.filter(s => !isAbsent(s)).map(s => Number(s.value)).filter(v => !Number.isNaN(v));
+    const latestRec = latestScored(arr)?.rec;
+    const item = {
+      unit, arr,
+      latest: latestRec ? Number(latestRec.value) : NaN,
+      best: nums.length ? Math.max(...nums) : NaN,
+      count: arr.length,
+      absentCount: arr.filter(isAbsent).length,
+      absentOnly: !latestRec
+    };
+    records.push(item);
+
+    if (item.absentOnly) return absent.push(item);
     done.push(item);
-    if (!Number.isNaN(latest) && latest < PASS_SCORE) retake.push(item);
+    if (!Number.isNaN(item.latest) && item.latest < PASS_SCORE) retake.push(item);
   });
 
   const valid = done.map(d => d.latest).filter(v => !Number.isNaN(v));
   const avg = valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
 
-  return { total: unitList.length, done, missing, retake, avg };
+  return { total: unitList.length, records, done, absent, missing, retake, avg };
 }
 
 function heroCardHtml(title, st, extraClass = "") {
@@ -1160,6 +1298,7 @@ function heroCardHtml(title, st, extraClass = "") {
         完成 <b>${st.done.length}/${st.total}</b>（${pct}%）｜
         平均 <b>${st.avg === null ? "—" : st.avg.toFixed(1)}</b>｜
         待補考 <b class="${st.retake.length ? "low-score" : ""}">${st.retake.length}</b>
+        ${st.absent.length ? `｜缺席 <b class="absent-text">${st.absent.length}</b>` : ""}
       </div>
     </div>`;
 }
@@ -1195,6 +1334,14 @@ function openScroll(id) {
         </span>`).join("") +
       `</div>`;
   }
+  if (allStats.absent.length) {
+    todo += `<div class="hero-todo-group"><b>🚫 缺席待補測</b>` +
+      allStats.absent.map(r => `
+        <span class="hero-chip absent-text">${r.unit}（${lastAbsentDate(r.arr)} 缺席）
+          <span class="add-btn" title="缺席補測" onclick="openRetakeInput('${id}','${r.unit}')">➕</span>
+        </span>`).join("") +
+      `</div>`;
+  }
   secStats.forEach(({ sec, st }) => {
     if (!st.missing.length) return;
     const shown = st.missing.slice(0, HERO_MISSING_LIMIT);
@@ -1220,30 +1367,35 @@ function openScroll(id) {
     </tr>
   `;
   secStats.forEach(({ sec, st }) => {
-    if (!st.done.length) return;
+    if (!st.records.length) return;
     html += `<tr class="hero-sec-row"><td colspan="5">${sec.icon} ${sec.label}</td></tr>`;
-    st.done.forEach(d => {
+    st.records.forEach(d => {
       const history = d.arr.map((s, index) => {
+        const absent = isAbsent(s);
         const v = Number(s.value);
+        const cls = absent ? "absent-text" : (v < PASS_SCORE ? "low-score" : "");
         return `
-          <span class="hero-chip ${v < PASS_SCORE ? "low-score" : ""}">
-            ${s.date ?? ""} <b>${Number.isNaN(v) ? "" : v}</b>
+          <span class="hero-chip ${cls}">
+            ${s.date ?? ""} <b>${absent ? "🚫缺席" : (Number.isNaN(v) ? "" : v)}</b>
             <span class="edit-btn" onclick="openEditScore('${id}','${d.unit}',${index})">✒️</span>
             <span class="check-no" style="cursor:pointer;" onclick="deleteScore('${id}','${d.unit}',${index})">❌</span>
           </span>`;
       }).join("");
       const low = !Number.isNaN(d.latest) && d.latest < PASS_SCORE;
+      const latestCell = d.absentOnly
+        ? `<td class="absent-text">🚫缺席</td>`
+        : `<td class="${low ? "low-score" : ""}">${Number.isNaN(d.latest) ? "" : d.latest}${low ? ' <span class="danger-icon">🔻補考</span>' : ""}</td>`;
       html += `
         <tr>
           <td>${d.unit}</td>
-          <td class="${low ? "low-score" : ""}">${Number.isNaN(d.latest) ? "" : d.latest}${low ? ' <span class="danger-icon">🔻補考</span>' : ""}</td>
+          ${latestCell}
           <td>${Number.isNaN(d.best) ? "" : d.best}</td>
-          <td>${d.count}</td>
+          <td>${d.count}${d.absentCount ? `<br><span class="absent-text">缺席 ${d.absentCount}</span>` : ""}</td>
           <td class="hero-history">${history}</td>
         </tr>`;
     });
   });
-  if (!allStats.done.length) html += `<tr><td colspan="5" class="missing">還沒有任何成績紀錄。</td></tr>`;
+  if (!allStats.records.length) html += `<tr><td colspan="5" class="missing">還沒有任何成績紀錄。</td></tr>`;
   document.getElementById("recordTable").innerHTML = html;
 
   /* ---- 進度曲線：每個區塊一條線 ---- */
@@ -1296,10 +1448,13 @@ function deleteScore(id, unit, index) {
 }
 
 function getAIAdvice(allStats, secStats) {
-  if (allStats.avg === null) return "目前沒有成績資料。";
+  const absentMsg = allStats.absent.length
+    ? `🚫 缺席待補測：${allStats.absent.slice(0, 5).map(r => r.unit).join("、")}${allStats.absent.length > 5 ? ` 等 ${allStats.absent.length} 個` : ""}<br>`
+    : "";
+  if (allStats.avg === null) return absentMsg + "目前沒有成績資料。";
   const avg = allStats.avg;
 
-  let msg = "";
+  let msg = absentMsg;
   if (avg >= 95) msg += "🌟 整體表現非常優秀！<br>";
   else if (avg >= 85) msg += "✨ 表現不錯，持續保持！<br>";
   else msg += "🌱 多練習一點會更棒！<br>";
@@ -1326,12 +1481,12 @@ function getAIAdvice(allStats, secStats) {
    ====================================================== */
 
 function exportData() {
-  const obj = getDataSnapshot();
+  const obj = { className: currentClassName(), ...getDataSnapshot() };
   const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "勇者公會成績資料.json";
+  a.download = `勇者公會成績資料_${currentClassName() || "未命名"}.json`;
   a.click();
   URL.revokeObjectURL(url);
   clearDirtyForExport();
@@ -1350,21 +1505,14 @@ function importData(event) {
         return;
       }
 
-      units = json.units;
-      sectionUnits = json.sectionUnits || null;
-      studentOrder = json.studentOrder || [];
-      Students = json.Students;
-      normalizeAllStudents();
+      const from = json.className ? `（檔案班級：${json.className}）` : "";
+      if (!confirm(`匯入會取代「${currentClassName()}」目前的所有資料${from}，確定？\n若要匯入成另一個班級，請先在「🏫 班級 / 成績單」創建新班級再匯入。`)) return;
 
-      const prevInit = isInitializing;
-      isInitializing = true;
-      try {
-        localStorage.setItem("V7Students", JSON.stringify(getDataSnapshot()));
-      } catch (_) {}
-      isInitializing = prevInit;
+      applySnapshot(json);
+      persistCurrentClass();
 
       renderTable();
-      alert("匯入成功。");
+      alert(`匯入成功：已更新「${currentClassName()}」。`);
     } catch (err) {
       console.error(err);
       alert("匯入失敗：JSON 解析錯誤。");
@@ -1380,22 +1528,230 @@ function importData(event) {
    ====================================================== */
 
 function saveData() {
-  try {
-    localStorage.setItem("V7Students", JSON.stringify(getDataSnapshot()));
-  } catch (_) {}
+  persistCurrentClass();
   markDirtyForExport();
 }
 
-function loadData() {
-  const saved = localStorage.getItem("V7Students");
-  if (!saved) return;
+// 把一份資料（存檔 / 匯入 / Google Sheet）套用成目前的工作資料
+function applySnapshot(obj) {
+  units = Array.isArray(obj?.units) ? obj.units : [];
+  sectionUnits = obj?.sectionUnits || null;
+  studentOrder = obj?.studentOrder || [];
+  Students = obj?.Students || {};
+  normalizeAllStudents();
+}
+
+/* ======================================================
+   班級（成績單）：每個班級各自一份單元 / 區塊 / 學生 / 成績
+   localStorage：
+     V7Classes          → { currentId, classes: { id: { name, createdAt, updatedAt } } }
+     V7Class_<id>       → 該班的資料（getDataSnapshot 格式）
+     V7Students（舊版） → 只在第一次轉成「我的班級」時讀取，保留不刪當備份
+   ====================================================== */
+
+const CLASSES_KEY = "V7Classes";
+const CLASS_DATA_PREFIX = "V7Class_";
+let classRegistry = { currentId: null, classes: {} };
+
+function currentClassName() {
+  return classRegistry.classes[classRegistry.currentId]?.name || "";
+}
+
+function saveRegistry() {
+  try { localStorage.setItem(CLASSES_KEY, JSON.stringify(classRegistry)); } catch (_) {}
+}
+
+function readClassData(id) {
+  try { return JSON.parse(localStorage.getItem(CLASS_DATA_PREFIX + id) || "null"); }
+  catch (_) { return null; }
+}
+
+function writeClassData(id, snapshot) {
+  try { localStorage.setItem(CLASS_DATA_PREFIX + id, JSON.stringify(snapshot)); } catch (_) {}
+}
+
+function persistCurrentClass() {
+  const id = classRegistry.currentId;
+  if (!id) return;
+  writeClassData(id, getDataSnapshot());
+  if (classRegistry.classes[id]) classRegistry.classes[id].updatedAt = Date.now();
+  saveRegistry();
+}
+
+function generateClassId() {
+  return "C" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// 第一次使用：把原本的單一成績單（V7Students，沒有就用預設單元 + data.js）轉成「我的班級」
+function ensureClassRegistry() {
   try {
-    const obj = JSON.parse(saved);
-    if (obj.units) units = obj.units;
-    sectionUnits = obj.sectionUnits || null;
-    studentOrder = obj.studentOrder || [];
-    if (obj.Students) Students = obj.Students;
+    const obj = JSON.parse(localStorage.getItem(CLASSES_KEY) || "null");
+    if (obj && obj.classes) classRegistry = obj;
   } catch (_) {}
+
+  const ids = Object.keys(classRegistry.classes);
+  if (ids.length) {
+    if (!classRegistry.classes[classRegistry.currentId]) classRegistry.currentId = ids[0];
+    return;
+  }
+
+  let legacy = null;
+  try { legacy = JSON.parse(localStorage.getItem("V7Students") || "null"); } catch (_) {}
+
+  const id = generateClassId();
+  const now = Date.now();
+  writeClassData(id, legacy || { units, Students });
+  classRegistry = { currentId: id, classes: { [id]: { name: "我的班級", createdAt: now, updatedAt: now } } };
+  saveRegistry();
+}
+
+function renderClassLabel() {
+  const name = currentClassName();
+  const label = document.getElementById("classNameLabel");
+  if (label) label.textContent = name ? `｜${name}` : "";
+  document.title = name ? `${name}｜勇者公會成績看板` : "勇者公會成績看板";
+}
+
+function switchClass(id) {
+  if (!classRegistry.classes[id]) return;
+  if (classRegistry.currentId !== id) persistCurrentClass();
+
+  classRegistry.currentId = id;
+  saveRegistry();
+  applySnapshot(readClassData(id) || {});
+
+  const popup = document.getElementById("scrollPopup");
+  if (popup && !popup.classList.contains("hidden")) closeScroll();
+
+  renderClassLabel();
+  renderTable();
+}
+
+/* ---- 選擇 / 創建成績單視窗 ---- */
+
+function formatDateTime(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// 依最後更新排序（最近用的在最上面）
+function getClassIdsByRecent() {
+  return Object.keys(classRegistry.classes)
+    .sort((a, b) => (classRegistry.classes[b].updatedAt || 0) - (classRegistry.classes[a].updatedAt || 0));
+}
+
+function openClassBox() {
+  const ids = getClassIdsByRecent();
+  const curId = classRegistry.currentId;
+
+  document.getElementById("classList").innerHTML = ids.map(id => {
+    const info = classRegistry.classes[id];
+    const data = id === curId ? getDataSnapshot() : (readClassData(id) || {});
+    const stuCount = Object.keys(data.Students || {}).length;
+    const unitCount = (data.units || []).length;
+    const isCur = id === curId;
+    return `
+      <div class="class-row ${isCur ? "current" : ""}">
+        <div class="class-info">
+          <b>${info.name}</b>${isCur ? '<span class="class-tag">使用中</span>' : ""}
+          <div class="class-meta">學生 ${stuCount}｜單元 ${unitCount}｜更新 ${formatDateTime(info.updatedAt)}</div>
+        </div>
+        <div class="class-actions">
+          <button class="primary" id="${isCur ? "classContinueBtn" : ""}" onclick="useClass('${id}')">繼續使用</button>
+          <button class="ghost" title="改名" onclick="renameClass('${id}')">✏️</button>
+          <button class="ghost" title="刪除" onclick="deleteClass('${id}')">🗑️</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  document.getElementById("newClassCopyFrom").innerHTML =
+    `<option value="">空白（自己新增單元）</option>` +
+    ids.map(id => `<option value="${id}">複製「${classRegistry.classes[id].name}」的單元與區塊</option>`).join("");
+  document.getElementById("newClassName").value = "";
+  document.getElementById("newClassCopyStudents").checked = false;
+
+  document.getElementById("classBox").classList.remove("hidden");
+  focusField("classContinueBtn");
+}
+
+function closeClassBox() {
+  document.getElementById("classBox").classList.add("hidden");
+}
+
+function useClass(id) {
+  switchClass(id);
+  closeClassBox();
+}
+
+function createClass() {
+  const name = document.getElementById("newClassName").value.trim();
+  if (!name) {
+    alert("請輸入班級名稱。");
+    return focusField("newClassName");
+  }
+  if (Object.values(classRegistry.classes).some(c => c.name === name)) {
+    return alert(`已經有「${name}」這個班級了。`);
+  }
+
+  const fromId = document.getElementById("newClassCopyFrom").value;
+  const copyStudents = document.getElementById("newClassCopyStudents").checked;
+  const snapshot = { units: [], sectionUnits: null, studentOrder: [], Students: {} };
+
+  if (fromId) {
+    const src = fromId === classRegistry.currentId ? getDataSnapshot() : readClassData(fromId);
+    if (src) {
+      snapshot.units = [...(src.units || [])];
+      snapshot.sectionUnits = src.sectionUnits ? JSON.parse(JSON.stringify(src.sectionUnits)) : null;
+      if (copyStudents) {
+        snapshot.studentOrder = [...(src.studentOrder || [])];
+        Object.entries(src.Students || {}).forEach(([sid, stu]) => {
+          snapshot.Students[sid] = { name: stu.name, grade: stu.grade, scores: {} };
+        });
+      }
+    }
+  } else if (copyStudents) {
+    return alert("要複製學生名單，請先在「單元設定」選一個來源班級。");
+  }
+
+  persistCurrentClass();
+  const id = generateClassId();
+  const now = Date.now();
+  classRegistry.classes[id] = { name, createdAt: now, updatedAt: now };
+  writeClassData(id, snapshot);
+  saveRegistry();
+
+  switchClass(id);
+  closeClassBox();
+}
+
+function renameClass(id) {
+  const info = classRegistry.classes[id];
+  if (!info) return;
+  const name = (prompt("新的班級名稱：", info.name) || "").trim();
+  if (!name || name === info.name) return;
+  if (Object.entries(classRegistry.classes).some(([cid, c]) => cid !== id && c.name === name)) {
+    return alert(`已經有「${name}」這個班級了。`);
+  }
+  info.name = name;
+  saveRegistry();
+  renderClassLabel();
+  openClassBox();
+}
+
+function deleteClass(id) {
+  const info = classRegistry.classes[id];
+  if (!info) return;
+  if (id === classRegistry.currentId) {
+    return alert("無法刪除正在使用的班級，請先切換到其他班級（或先創建一個新的）。");
+  }
+  if (!confirm(`確定刪除「${info.name}」？\n此班級的所有學生與成績都會刪除（建議先切換過去匯出備份）。`)) return;
+
+  delete classRegistry.classes[id];
+  try { localStorage.removeItem(CLASS_DATA_PREFIX + id); } catch (_) {}
+  saveRegistry();
+  openClassBox();
 }
 
 function normalizeAllStudents() {
@@ -1518,7 +1874,11 @@ function ensureDeleteStudentBox() {
 
 // 由上層到下層；onEnter 為 null 表示 Enter 不做事（刪除類避免誤按）
 const MODAL_KEYS = [
-  { id: "inputBox",         onEnter: () => saveInput(),       onEsc: () => closeInput() },
+  { id: "classBox",
+    // 在班級名稱欄按 Enter → 建立；其他地方按 Enter → 繼續使用目前班級
+    onEnter: e => (e.target.id === "newClassName" ? createClass() : useClass(classRegistry.currentId)),
+    onEsc: () => closeClassBox() },
+  { id: "inputBox",        onEnter: () => saveInput(),       onEsc: () => closeInput() },
   { id: "batchBox",         onEnter: onBatchKey,              onEsc: () => closeBatch(), raw: true },
   { id: "unitBox",          onEnter: () => saveUnit(),        onEsc: () => closeUnit() },
   { id: "studentBox",       onEnter: () => saveStudent(),     onEsc: () => closeStudent() },
@@ -1547,14 +1907,14 @@ document.addEventListener("keydown", (e) => {
   // 批量輸入自己處理 Enter 與上下鍵
   if (modal.raw) {
     if (e.target.tagName === "BUTTON") return;
-    if (["Enter", "ArrowDown", "ArrowUp"].includes(e.key)) modal.onEnter(e);
+    if (["Enter", "ArrowDown", "ArrowUp", "a", "A"].includes(e.key)) modal.onEnter(e);
     return;
   }
 
   // 焦點在按鈕上時讓按鈕自己處理，避免儲存兩次
   if (e.key === "Enter" && modal.onEnter && e.target.tagName !== "BUTTON") {
     e.preventDefault();
-    modal.onEnter();
+    modal.onEnter(e);
   }
 });
 
@@ -1564,15 +1924,20 @@ document.addEventListener("keydown", (e) => {
 
 (function init() {
   ensureBackupBanner();
-  loadData();
-  normalizeAllStudents();
+  ensureClassRegistry();
+  // 讀不到（例如瀏覽器封鎖儲存空間）時，退回預設單元 + data.js
+  applySnapshot(readClassData(classRegistry.currentId) || { units, Students });
   migrateVocabUnits();
 
   const el = document.getElementById("sortSelect");
   if (el) sortMode = el.value || "default";
 
+  renderClassLabel();
   renderTable();
   isInitializing = false;
+
+  // 一打開先選擇：繼續使用舊成績單 / 創建新成績單
+  openClassBox();
 })();
 
 /* ======================================================
@@ -1580,6 +1945,14 @@ document.addEventListener("keydown", (e) => {
    ====================================================== */
 
 Object.assign(window, {
+  // class
+  openClassBox,
+  closeClassBox,
+  useClass,
+  createClass,
+  renameClass,
+  deleteClass,
+
   // render / sort
   renderTable,
   setSortMode,
@@ -1590,6 +1963,7 @@ Object.assign(window, {
   openRetakeInput,
   closeInput,
   saveInput,
+  syncInputAbsent,
   openBatchInput,
   renderBatchList,
   saveBatch,

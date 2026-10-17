@@ -278,7 +278,7 @@ select{
 /* 彈窗通用 */
 .hidden{ display:none !important; }
 
-#scrollPopup, #inputBox, #unitBox, #studentBox, #batchBox{
+#scrollPopup, #inputBox, #unitBox, #studentBox, #batchBox, #classBox{
   position: fixed;
   inset:0;
   background: rgba(255, 240, 250, 0.75);
@@ -369,6 +369,10 @@ select{
   border-bottom:1px solid rgba(70,50,80,0.08);
   text-align:center;
 }
+
+/* 缺席（沒有出席，無法檢測） */
+.absent-cell, .absent-text{ color:#b7791f; font-weight:600; }
+.hero-chip.absent-text{ border-color:rgba(214,158,46,0.5); background:rgba(255,236,179,0.35); }
 
 /* 勇者資訊：總覽卡片 */
 .hero-cards{
@@ -476,6 +480,59 @@ select{
   box-shadow:none;
 }
 #batchList tr.batch-active td{ background:rgba(255,158,203,0.12); }
+
+/* 班級 / 成績單 */
+#classNameLabel{ font-size:0.7em; color:var(--muted); margin-left:8px; }
+#classInner{
+  position:relative;
+  width:min(560px, 94vw);
+  max-height:92vh;
+  overflow:auto;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding:20px 18px 16px;
+  box-shadow: var(--shadow-strong);
+}
+#classInner h3{ margin:0 0 12px; }
+#classInner h3.class-new-title{
+  margin-top:18px;
+  padding-top:14px;
+  border-top:1px dashed var(--border);
+}
+#classClose{
+  position:absolute;
+  right:12px;
+  top:10px;
+  cursor:pointer;
+  padding:4px 10px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,0.85);
+}
+.class-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  margin-bottom:8px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:rgba(255,255,255,0.75);
+}
+.class-row.current{ border-color:rgba(255,158,203,0.8); background:rgba(255,158,203,0.10); }
+.class-info{ flex:1; min-width:0; }
+.class-meta{ font-size:12px; color:var(--muted); margin-top:2px; }
+.class-tag{
+  font-size:11px;
+  padding:1px 8px;
+  margin-left:6px;
+  border-radius:999px;
+  background:rgba(255,158,203,0.25);
+}
+.class-actions{ display:flex; gap:6px; flex-shrink:0; }
+.inline-check{ display:flex; align-items:center; gap:6px; cursor:pointer; }
+.inline-check input{ width:auto; box-shadow:none; margin:0; }
 
 /* 姓名拖移排序 */
 .nameCell[draggable="true"]{ cursor:grab; }
