@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>勇者公會成績看板 v7.8</title>
+  <title>勇者公會成績看板 v8.0</title>
 
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -30,12 +30,12 @@
     <!-- 單元 -->
     <button onclick="openAddUnit()">＋ 新增單元</button>
     <button onclick="openDeleteUnitMenu()">🗑️ 刪除單元</button>
-
+    <button onclick="openEditUnitMenu()">✏️ 編輯單元</button>
     <span class="divider"></span>
 
     <!-- 排序 -->
     <select id="sortSelect" onchange="setSortMode()">
-      <option value="default">排序：原始</option>
+      <option value="default">排序：自訂（拖移姓名）</option>
       <option value="avgHigh">平均分數（高→低）</option>
       <option value="avgLow">平均分數（低→高）</option>
       <option value="incomplete">未完成（少→多）</option>
@@ -56,10 +56,8 @@
     <input id="importFile" type="file" accept=".json" style="display:none" onchange="importData(event)">
   </div>
 
-  <!-- 成績總表 -->
-  <div id="tableWrapper">
-    <table id="scoreTable"></table>
-  </div>
+  <!-- 成績總表（三個區塊，由 main.js 產生） -->
+  <div id="sectionsHost"></div>
 </div>
 
 <!-- 書卷彈窗 -->
@@ -69,7 +67,13 @@
 
     <h2 id="stuName" class="scroll-title"></h2>
 
-    <h3 class="scroll-subtitle">⚔️ 能力值（全部成績）</h3>
+    <h3 class="scroll-subtitle">📊 勇者總覽</h3>
+    <div id="heroSummary" class="hero-cards"></div>
+
+    <h3 class="scroll-subtitle">📌 待處理</h3>
+    <div id="heroTodo"></div>
+
+    <h3 class="scroll-subtitle">⚔️ 成績紀錄（依區塊）</h3>
     <table id="recordTable" class="scroll-table"></table>
 
     <h3 class="scroll-subtitle">📈 進度曲線（各單元最新）</h3>
@@ -98,10 +102,38 @@
   </div>
 </div>
 
+<!-- 批量輸入成績視窗 -->
+<div id="batchBox" class="hidden">
+  <div id="batchInner">
+    <h3 id="batchTitle">📝 批量輸入成績</h3>
+
+    <label>單元：</label>
+    <select id="batchUnit" onchange="renderBatchList()"></select>
+    <input id="batchNewUnit" class="hidden" placeholder="新單元名稱，例如：1/5 單字" style="margin-top:8px;">
+
+    <label>日期：</label>
+    <input id="batchDate" placeholder="例如：12/09">
+
+    <div class="batch-hint">分數空白＝這位不輸入｜Enter / ↓ 跳下一位，最後一位按 Enter 儲存｜Esc 取消</div>
+
+    <div id="batchListWrap">
+      <table id="batchList" class="scroll-table"></table>
+    </div>
+
+    <div class="modal-actions">
+      <button class="primary" onclick="saveBatch()">💾 全部儲存</button>
+      <button class="ghost" onclick="closeBatch()">取消</button>
+    </div>
+  </div>
+</div>
+
 <!-- 新增單元視窗 -->
 <div id="unitBox" class="hidden">
   <div id="unitInner">
     <h3>新增單元</h3>
+    <label>區塊：</label>
+    <select id="unitSection"></select>
+
     <label>單元名稱：</label>
     <input id="unitName" placeholder="例如：L11">
 

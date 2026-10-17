@@ -193,7 +193,7 @@ select{
 }
 
 /* 表格區 */
-#tableWrapper{
+.tableWrapper{
   position: relative;
   overflow:auto;
   border-radius:var(--radius);
@@ -203,19 +203,19 @@ select{
 }
 
 /* 主表格 */
-#scoreTable{
+.scoreTable{
   width:100%;
   border-collapse:collapse;
   min-width:860px;
 }
-#scoreTable th, #scoreTable td{
+.scoreTable th, .scoreTable td{
   padding:10px 10px;
   border-bottom:1px solid rgba(70,50,80,0.08);
   text-align:center;
   vertical-align:middle;
   white-space:nowrap;
 }
-#scoreTable th{
+.scoreTable th{
   position: sticky;
   top:0;
   z-index:3;
@@ -227,6 +227,17 @@ select{
   font-weight:700;
   color:#4a3b55;
 }
+
+/* 三個成績區塊 */
+.score-section{ margin-bottom:24px; }
+.section-head{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:0 0 10px;
+}
+.section-head h2{ margin:0; font-size:20px; color:#4a3b55; }
+.section-head button{ font-size:13px; }
 
 /* 左側凍結欄 */
 .leftFreeze{
@@ -267,7 +278,7 @@ select{
 /* 彈窗通用 */
 .hidden{ display:none !important; }
 
-#scrollPopup, #inputBox, #unitBox, #studentBox{
+#scrollPopup, #inputBox, #unitBox, #studentBox, #batchBox{
   position: fixed;
   inset:0;
   background: rgba(255, 240, 250, 0.75);
@@ -359,6 +370,57 @@ select{
   text-align:center;
 }
 
+/* 勇者資訊：總覽卡片 */
+.hero-cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+  gap:10px;
+}
+.hero-card{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:10px 12px;
+  background:rgba(255,255,255,0.75);
+}
+.hero-card.hero-total{ background:rgba(255,158,203,0.10); }
+.hero-card-title{ font-weight:700; margin-bottom:6px; }
+.hero-card-row{ font-size:13px; color:var(--muted); margin-top:6px; }
+.hero-progress{
+  height:8px;
+  border-radius:999px;
+  background:rgba(70,50,80,0.10);
+  overflow:hidden;
+}
+.hero-progress span{
+  display:block;
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg, rgba(255,158,203,0.9), rgba(143,215,255,0.9));
+}
+
+/* 勇者資訊：待處理 */
+.hero-todo-group{ margin:6px 0; line-height:2; }
+.hero-todo-group > b{ margin-right:6px; }
+.hero-chip{
+  display:inline-block;
+  margin:2px 4px 2px 0;
+  padding:2px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,0.85);
+  font-size:13px;
+  white-space:nowrap;
+}
+.hero-chip.low-score{ border-color:rgba(255,107,143,0.45); }
+
+/* 勇者資訊：成績紀錄 */
+.scroll-table tr.hero-sec-row td{
+  text-align:left;
+  font-weight:700;
+  background:rgba(143,215,255,0.12);
+}
+.hero-history{ text-align:left !important; white-space:normal; }
+
 /* Chart canvas */
 #chartCanvas{
   width:100% !important;
@@ -375,7 +437,52 @@ select{
   box-shadow: var(--shadow-strong);
 }
 
-#inputInner h3, #unitInner h3, #studentInner h3{ margin:0 0 12px; }
+#inputInner h3, #unitInner h3, #studentInner h3, #batchInner h3{ margin:0 0 12px; }
+
+/* 批量輸入 */
+#batchInner{
+  width:min(560px, 94vw);
+  max-height:92vh;
+  display:flex;
+  flex-direction:column;
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  padding:20px 18px 16px;
+  box-shadow: var(--shadow-strong);
+}
+.batch-hint{
+  margin:10px 0 6px;
+  font-size:12px;
+  color:var(--muted);
+}
+#batchListWrap{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:rgba(255,255,255,0.7);
+}
+#batchList th{
+  position:sticky;
+  top:0;
+  background:var(--panel);
+  z-index:1;
+}
+#batchList input{
+  width:90px;
+  padding:6px 8px;
+  box-shadow:none;
+}
+#batchList tr.batch-active td{ background:rgba(255,158,203,0.12); }
+
+/* 姓名拖移排序 */
+.nameCell[draggable="true"]{ cursor:grab; }
+.scoreTable tr.row-dragging td{ opacity:0.5; }
+.scoreTable tr.row-drag-over td{
+  border-top:2px dashed rgba(255,158,203,0.85);
+}
 
 label{
   display:block;
@@ -423,7 +530,7 @@ input{
 /* ==========================
    🌿 表格四角花藤（配合 index 內的 span）
 ========================== */
-#tableWrapper.vine-4 .corner-vine{
+.tableWrapper.vine-4 .corner-vine{
   position:absolute;
   width:80px;
   height:80px;
@@ -445,19 +552,19 @@ input{
       rgba(120,180,140,0.0) 65deg);
 }
 
-#tableWrapper.vine-4 .corner-vine.tl{ left:6px; top:6px; }
-#tableWrapper.vine-4 .corner-vine.tr{ right:6px; top:6px; transform: scaleX(-1); }
-#tableWrapper.vine-4 .corner-vine.bl{ left:6px; bottom:6px; transform: scaleY(-1); }
-#tableWrapper.vine-4 .corner-vine.br{ right:6px; bottom:6px; transform: rotate(180deg); }
+.tableWrapper.vine-4 .corner-vine.tl{ left:6px; top:6px; }
+.tableWrapper.vine-4 .corner-vine.tr{ right:6px; top:6px; transform: scaleX(-1); }
+.tableWrapper.vine-4 .corner-vine.bl{ left:6px; bottom:6px; transform: scaleY(-1); }
+.tableWrapper.vine-4 .corner-vine.br{ right:6px; bottom:6px; transform: rotate(180deg); }
 /* 讓年級欄更窄，姓名欄更緊密 */
-#scoreTable th.leftFreeze:first-child,
-#scoreTable td.leftFreeze:first-child{
+.scoreTable th.leftFreeze:first-child,
+.scoreTable td.leftFreeze:first-child{
   width: 70px;
   min-width: 70px;
 }
 
-#scoreTable th.leftFreeze.nameCell,
-#scoreTable td.leftFreeze.nameCell{
+.scoreTable th.leftFreeze.nameCell,
+.scoreTable td.leftFreeze.nameCell{
   min-width: 120px;
 }
 
